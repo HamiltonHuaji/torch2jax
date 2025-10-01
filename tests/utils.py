@@ -4,7 +4,8 @@ import jax.numpy as jnp
 import numpy as np
 import torch
 from jax import grad, jit, random
-from torch.utils._pytree import tree_leaves
+from torch.utils._pytree import tree_leaves as torch_tree_leaves
+from torch.utils._pytree import tree_map as torch_tree_map
 
 from torch2jax import j2t, t2j
 
@@ -33,13 +34,13 @@ def out_kwarg_test(f, args, kwargs={}, **assert_kwargs):
 
   def torch_function(*torch_args):
     out1 = f(*torch_args, **torch_kwargs)
-    out2 = torch.zeros_like(out1)
+    out2 = torch_tree_map(torch.zeros_like, out1)
     out3 = f(*torch_args, out=out2, **torch_kwargs)
     return out1, out2, out3
 
   jax_function = t2j(torch_function)
   jax_out1, jax_out2, jax_out3 = jax_function(*args)
-  assert jax_out2 is jax_out3
+  assert all(jax.tree.leaves(jax.tree.map(lambda x, y: x is y, jax_out2, jax_out3)))
   aac(jax_out1, jax_out3, **assert_kwargs)
 
 
@@ -102,7 +103,7 @@ def backward_test(f, args, kwargs={}, argnums=None, **assert_kwargs):
   torch_args = jax.tree.map(_arg2t, args)
   torch_kwargs = jax.tree.map(_arg2t, kwargs)
   # always reduce output to the mean of all elements
-  f_ = lambda *args: torch.cat(list(map(lambda x: x.flatten(), tree_leaves(f(*args, **torch_kwargs))))).mean()
+  f_ = lambda *args: torch.cat(list(map(lambda x: x.flatten(), torch_tree_leaves(f(*args, **torch_kwargs))))).mean()
   for t2j_grad, torch_grad in zip(
     grad(t2j(f_), argnums=argnums)(*args),
     torch.func.grad(f_, argnums=argnums)(*torch_args),
