@@ -428,14 +428,14 @@ def flatten(input, start_dim=0, end_dim=-1):
 @implements(torch.max, out_kwarg=True, Torchish_member=True)
 def max(input, *args, **kwargs):
   # Overload: torch.max(input, other)
-  if 'other' in kwargs or (args and isinstance(args[0], Torchish)):
-    other = kwargs.get('other', args[0] if args else None)
+  if "other" in kwargs or (args and isinstance(args[0], Torchish)):
+    other = kwargs.get("other", args[0] if args else None)
     return jnp.maximum(_v(input), _v(other))
 
   # Overload: torch.max(input, dim, keepdim)
-  if 'dim' in kwargs or (args and not isinstance(args[0], Torchish)):
-    dim = kwargs.get('dim', args[0] if args else None)
-    keepdim = kwargs.get('keepdim', args[1] if len(args) > 1 else False)
+  if "dim" in kwargs or (args and not isinstance(args[0], Torchish)):
+    dim = kwargs.get("dim", args[0] if args else None)
+    keepdim = kwargs.get("keepdim", args[1] if len(args) > 1 else False)
     indices = jnp.argmax(_v(input), axis=dim, keepdims=True)
     values = jnp.take_along_axis(_v(input), indices, axis=dim)
     if not keepdim:
