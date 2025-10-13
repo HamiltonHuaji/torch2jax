@@ -270,14 +270,24 @@ def implements(torch_function, Torchishify_output=True, out_kwarg=False, Torchis
   def decorator(func):
     if out_kwarg:
 
+      def assign(a, b):
+        a.value = b
+
       def func1(*args, out=None, **kwargs):
         if out is not None:
-          out.value = func(*args, **kwargs)
+          # an example of a function that requires a non-array out value is torch.max
+          # where out is a tuple of two tensors.
+          ret = func(*args, **kwargs)
+          torch_tree_map(assign, out, ret)
           return out
         else:
-          return Torchish(func(*args, **kwargs))
+          return torch_tree_map(Torchish, func(*args, **kwargs))
     elif Torchishify_output:
-      func1 = lambda *args, **kwargs: Torchish(func(*args, **kwargs))
+      # although func is jax code, but it is used to mock the torch function, therefore the returning container (if any) should be torch types
+      # e.g. torch.return_types.max, therefore, we use torch_tree_map here instead of jax.tree.map
+      # Registration of `torch.return_types` happens only when casting back to Jax. So it could be
+      # unregistered when we call this line, therefore we use torch tree_map instead of jax.tree.map
+      func1 = lambda *args, **kwargs: torch_tree_map(Torchish, func(*args, **kwargs))
     else:
       func1 = func
     functools.update_wrapper(func1, torch_function)
@@ -413,6 +423,27 @@ def empty(
 def flatten(input, start_dim=0, end_dim=-1):
   assert end_dim == -1, "TODO: implement end_dim"
   return jnp.reshape(_v(input), input.shape[:start_dim] + (-1,))
+
+
+@implements(torch.max, out_kwarg=True, Torchish_member=True)
+def max(input, *args, **kwargs):
+  # Overload: torch.max(input, other)
+  if "other" in kwargs or (args and isinstance(args[0], Torchish)):
+    other = kwargs.get("other", args[0] if args else None)
+    return jnp.maximum(_v(input), _v(other))
+
+  # Overload: torch.max(input, dim, keepdim)
+  if "dim" in kwargs or (args and not isinstance(args[0], Torchish)):
+    dim = kwargs.get("dim", args[0] if args else None)
+    keepdim = kwargs.get("keepdim", args[1] if len(args) > 1 else False)
+    indices = jnp.argmax(_v(input), axis=dim, keepdims=True)
+    values = jnp.take_along_axis(_v(input), indices, axis=dim)
+    if not keepdim:
+      values, indices = jnp.squeeze(values, axis=dim), jnp.squeeze(indices, axis=dim)
+    return torch.return_types.max([values, indices])
+
+  # Overload: torch.max(input)
+  return jnp.max(_v(input))
 
 
 @implements(torch.mean, Torchish_member=True, out_kwarg=True)
@@ -618,7 +649,10 @@ def scatter_add(input, dim, index, src):
 
 @implements(torch.sort, out_kwarg=True, Torchish_member=True)
 def sort(input, dim=-1, descending=False, stable=False):
-  return jnp.sort(_v(input), axis=dim, stable=stable, descending=descending)
+  input = _v(input)
+  sorted_indices = jnp.argsort(input, axis=dim, stable=stable, descending=descending)
+  sorted_values = jnp.take_along_axis(input, sorted_indices, axis=dim)
+  return torch.return_types.sort([sorted_values, sorted_indices])
 
 
 @implements(torch.sum, Torchish_member=True, out_kwarg=True)
@@ -633,6 +667,31 @@ def tensor(data, dtype=None, device=None, requires_grad=False, pin_memory=False)
   return jnp.array(
     data.value if isinstance(data, Torchish) else data, dtype=(t2j_dtype(dtype) if dtype is not None else None)
   )
+
+
+@implements(torch.topk, out_kwarg=True, Torchish_member=True)
+def topk(input, k, dim=None, largest=True, sorted=True):
+  input = _v(input)
+  dim = dim if dim is not None else -1
+  if dim != -1 and dim != input.ndim - 1:
+    input = jnp.swapaxes(input, dim, -1)
+
+  if largest:
+    values, indices = jax.lax.top_k(input, k)
+  else:
+    values, indices = jax.lax.top_k(-input, k)
+    values = -values
+
+  if sorted:
+    sort_indices = jnp.argsort(values, axis=-1, descending=largest)
+    values = jnp.take_along_axis(values, sort_indices, axis=-1)
+    indices = jnp.take_along_axis(indices, sort_indices, axis=-1)
+
+  if dim != -1 and dim != input.ndim - 1:
+    values = jnp.swapaxes(values, dim, -1)
+    indices = jnp.swapaxes(indices, dim, -1)
+
+  return torch.return_types.topk([values, indices])
 
 
 @implements(torch.unbind, Torchishify_output=False, Torchish_member=True)

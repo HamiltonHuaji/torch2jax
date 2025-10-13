@@ -259,6 +259,40 @@ def test_oneliners():
   t2j_function_test(lambda x, y: x ^ y, [(3, 1), (3, 1)], samplers=samplers, tests=f)
   t2j_function_test(lambda x: ~x, [(3, 1)], samplers=[random.bernoulli], tests=f)
 
+  # max with only input arg, returns a scalar
+  t2j_function_test(torch.max, [(3, 5)], atol=1e-6, tests=fbm)
+  # max on one tensor with dim, keepdim, returns the max values and the indices
+  t2j_function_test(torch.max, [(3, 5)], kwargs=dict(dim=1), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.max, [(3, 5)], kwargs=dict(dim=1, keepdim=True), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.max, [(3, 5, 7)], kwargs=dict(dim=0, keepdim=True), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.max, [(3, 5, 7)], kwargs=dict(dim=1, keepdim=True), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.max, [(3, 5, 7)], kwargs=dict(dim=2, keepdim=True), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.max, [(3, 5, 7)], kwargs=dict(dim=0, keepdim=False), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.max, [(3, 5, 7)], kwargs=dict(dim=1, keepdim=False), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.max, [(3, 5, 7)], kwargs=dict(dim=2, keepdim=False), atol=1e-6, tests=fbmo)
+  # test with combination of args and kwargs
+  t2j_function_test(lambda input, out=None: torch.max(input, 2, False, out=out), [(3, 5, 7)], atol=1e-6, tests=fbo)
+  t2j_function_test(
+    lambda input, out=None: torch.max(input, 2, keepdim=False, out=out), [(3, 5, 7)], atol=1e-6, tests=fbo
+  )
+  # max to compare two tensor, returns the element-wise max values
+  t2j_function_test(torch.max, [(3, 5, 7), (3, 5, 7)], atol=1e-6, tests=fbm)
+  t2j_function_test(torch.max, [(3, 5, 7), (5, 7)], atol=1e-6, tests=fbm)  # broadcasting
+  t2j_function_test(torch.max, [(3, 5, 7), (7)], atol=1e-6, tests=fbm)  # broadcasting
+  # test with kwargs
+  t2j_function_test(
+    lambda input, other, out=None: torch.max(input, other=other, out=out), [(3, 5, 7), (3, 5, 7)], atol=1e-6, tests=fbo
+  )
+  t2j_function_test(torch.sort, [(3, 5)], kwargs=dict(dim=0), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.sort, [(3, 5)], kwargs=dict(dim=1), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.sort, [(3, 5)], kwargs=dict(dim=0, descending=True), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.topk, [(7, 9)], kwargs=dict(k=1, dim=0), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.topk, [(7, 9)], kwargs=dict(k=2, dim=0), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.topk, [(7, 9)], kwargs=dict(k=3, dim=0), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.topk, [(7, 9)], kwargs=dict(k=1, dim=1), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.topk, [(7, 9)], kwargs=dict(k=2, dim=1), atol=1e-6, tests=fbmo)
+  t2j_function_test(torch.topk, [(7, 9)], kwargs=dict(k=3, dim=1), atol=1e-6, tests=fbmo)
+
   # Seems like an innocent test, but this can cause segfaults when using dlpack in t2j_array
   t2j_function_test(lambda x: torch.tensor([3.0]) * torch.mean(x), [(5,)], atol=1e-6, tests=fb)
 
