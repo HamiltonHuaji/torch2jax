@@ -171,7 +171,7 @@ class Torchish:
   def float(self): return Torchish(jnp.astype(self.value, jnp.float32))
   def item(self): return self.value.item()
   def permute(self, *shape): return torch.permute(self, shape)
-  def size(self): return self.shape
+  def size(self, dim: None = None): return self.shape if dim is None else self.shape[dim]
   def type_as(self, other): return Torchish(jnp.astype(self.value, other.value.dtype))
   # fmt: on
 
