@@ -81,8 +81,15 @@ HANDLED_FUNCTIONS = {}
 
 
 class Torchish:
+    """
+    This class mocks torch.Tensor.
+    The implementation either uses jax, or use functions under `torch` that we have registered overrides for with the `@implements` decorator.
+    Do not try to call torch.Tensor methods.
+    Return values of these methods must be Torchish if they are tensors, or tuples/lists/dicts of Torchish if they are containers of tensors, so that the returned value can be correctly handled by the dispatch logic in `TorchishMode`. If a method returns a non-tensor value, it should return a JAX-compatible type (e.g. int, float, numpy array) instead of a Torchish. This is because some torch functions have non-tensor return values (e.g. Tensor.item() returns a Python scalar), and returning a Torchish in those cases would be confusing and error-prone.
+    Do not return torch.Tensor or other torch types from these methods.
+    """
 
-    def __init__(self, value):
+    def __init__(self, value: jax.Array):
         self.value = value
 
     @property
@@ -129,6 +136,19 @@ class Torchish:
     def is_nested(self):
         # NOTE: we disallow instantiating with NestedTensors.
         return False
+
+    @property
+    def grad(self):
+        # Torchish does not store backward graph state like torch.Tensor.
+        return None
+
+    @property
+    def real(self):
+        return Torchish(jnp.real(self.value))
+
+    @property
+    def imag(self):
+        return Torchish(jnp.imag(self.value))
 
     def expand(self, *sizes):
         assert len(
@@ -219,6 +239,252 @@ class Torchish:
                                         minval=a,
                                         maxval=b)
         return self
+
+    # fmt: off
+    def acos(self): return Torchish(jnp.arccos(self.value))
+    def acos_(self): self.value = jnp.arccos(self.value); return self
+    def acosh(self): return Torchish(jnp.arccosh(self.value))
+    def addmm(self, mat1, mat2, beta=1, alpha=1): return Torchish(beta * self.value + alpha * (_coerce(mat1) @ _coerce(mat2)))
+    def addmv(self, mat, vec, beta=1, alpha=1): return Torchish(beta * self.value + alpha * (_coerce(mat) @ _coerce(vec)))
+    def addr(self, vec1, vec2, beta=1, alpha=1): return Torchish(beta * self.value + alpha * jnp.outer(_coerce(vec1), _coerce(vec2)))
+    def addr_(self, vec1, vec2, beta=1, alpha=1): self.value = beta * self.value + alpha * jnp.outer(_coerce(vec1), _coerce(vec2)); return self
+    def amax(self, dim=None, keepdim=False): return Torchish(jnp.max(self.value, axis=dim, keepdims=keepdim))
+    def amin(self, dim=None, keepdim=False): return Torchish(jnp.min(self.value, axis=dim, keepdims=keepdim))
+    def angle(self): return Torchish(jnp.angle(self.value))
+    def asin(self): return Torchish(jnp.arcsin(self.value))
+    def asin_(self): self.value = jnp.arcsin(self.value); return self
+    def asinh(self): return Torchish(jnp.arcsinh(self.value))
+    def atan(self): return Torchish(jnp.arctan(self.value))
+    def atan2(self, other): return Torchish(jnp.arctan2(self.value, _coerce(other)))
+    def atan_(self): self.value = jnp.arctan(self.value); return self
+    def atanh(self): return Torchish(jnp.arctanh(self.value))
+    def bmm(self, mat2): return Torchish(self.value @ _coerce(mat2))
+    def bool(self): return Torchish(self.value.astype(jnp.bool_))
+    def byte(self): return Torchish(self.value.astype(jnp.uint8))
+    def ceil(self): return Torchish(jnp.ceil(self.value))
+    def ceil_(self): self.value = jnp.ceil(self.value); return self
+    def chalf(self): return Torchish(self.value.astype(jnp.complex64))
+    def char(self): return Torchish(self.value.astype(jnp.int8))
+    def chunk(self, chunks, dim=0): return tuple(Torchish(x) for x in jnp.array_split(self.value, chunks, axis=dim))
+    def clamp(self, min=None, max=None): return Torchish(jnp.clip(self.value, min, max))
+    def clip(self, min=None, max=None): return Torchish(jnp.clip(self.value, min, max))
+    def clip_(self, min=None, max=None): self.value = jnp.clip(self.value, min, max); return self
+    def conj(self): return Torchish(jnp.conj(self.value))
+    def copy_(self, src): self.value = jnp.array(_coerce(src), dtype=self.value.dtype); return self
+    def cosh(self): return Torchish(jnp.cosh(self.value))
+    def cosh_(self): self.value = jnp.cosh(self.value); return self
+    def cov(self): return Torchish(jnp.cov(self.value))
+    def cpu(self, memory_format=None): return self
+    def cross(self, other, dim=-1): return Torchish(jnp.cross(self.value, _coerce(other), axis=dim))
+    def cuda(self, device=None, non_blocking=False, memory_format=None): return self
+    def det(self): return Torchish(jnp.linalg.det(self.value))
+    def diag(self, diagonal=0): return Torchish(jnp.diag(self.value, k=diagonal))
+    def diff(self, n=1, dim=-1, prepend=None, append=None): return Torchish(jnp.diff(self.value, n=n, axis=dim, prepend=_coerce(prepend) if prepend is not None else None, append=_coerce(append) if append is not None else None))
+    def dist(self, other, p=2): return Torchish(jnp.linalg.norm(self.value - _coerce(other), ord=p))
+    def dot(self, tensor): return Torchish(jnp.dot(self.value, _coerce(tensor)))
+    def eq(self, other): return Torchish(self.value == _coerce(other))
+    def eq_(self, other): self.value = self.value == _coerce(other); return self
+    def equal(self, other): return bool(jnp.array_equal(self.value, _coerce(other)))
+    def erf(self): return Torchish(jax.lax.erf(self.value))
+    def erf_(self): self.value = jax.lax.erf(self.value); return self
+    def erfc(self): return Torchish(jax.lax.erfc(self.value))
+    def erfc_(self): self.value = jax.lax.erfc(self.value); return self
+    def expm1(self): return Torchish(jnp.expm1(self.value))
+    def fill_(self, value): self.value = jnp.full_like(self.value, _coerce(value)); return self
+    def fix(self): return Torchish(jnp.fix(self.value))
+    def fix_(self): self.value = jnp.fix(self.value); return self
+    def flip(self, dims): return Torchish(jnp.flip(self.value, axis=dims))
+    def floor(self): return Torchish(jnp.floor(self.value))
+    def floor_(self): self.value = jnp.floor(self.value); return self
+    def fmax(self, other): return Torchish(jnp.fmax(self.value, _coerce(other)))
+    def fmin(self, other): return Torchish(jnp.fmin(self.value, _coerce(other)))
+    def fmod(self, other): return Torchish(jnp.fmod(self.value, _coerce(other)))
+    def fmod_(self, other): self.value = jnp.fmod(self.value, _coerce(other)); return self
+    def frac(self): return Torchish(self.value - jnp.trunc(self.value))
+    def frac_(self): self.value = self.value - jnp.trunc(self.value); return self
+    def frexp(self):
+        mantissa, exponent = jnp.frexp(self.value)
+        return (Torchish(mantissa), Torchish(exponent))
+    def gcd(self, other): return Torchish(jnp.gcd(self.value, _coerce(other)))
+    def gcd_(self, other): self.value = jnp.gcd(self.value, _coerce(other)); return self
+    def ge(self, other): return Torchish(self.value >= _coerce(other))
+    def ge_(self, other): self.value = self.value >= _coerce(other); return self
+    def ger(self, vec2): return Torchish(jnp.outer(self.value, _coerce(vec2)))
+    def gt(self, other): return Torchish(self.value > _coerce(other))
+    def gt_(self, other): self.value = self.value > _coerce(other); return self
+    def half(self): return Torchish(self.value.astype(jnp.float16))
+    def hypot(self, other): return Torchish(jnp.hypot(self.value, _coerce(other)))
+    def i0(self): return Torchish(jnp.i0(self.value))
+    def i0_(self): self.value = jnp.i0(self.value); return self
+    def inner(self, other): return Torchish(jnp.inner(self.value, _coerce(other)))
+    def int(self): return Torchish(self.value.astype(jnp.int32))
+    def isinf(self): return Torchish(jnp.isinf(self.value))
+    def isnan(self): return Torchish(jnp.isnan(self.value))
+    def lcm(self, other): return Torchish(jnp.lcm(self.value, _coerce(other)))
+    def lcm_(self, other): self.value = jnp.lcm(self.value, _coerce(other)); return self
+    def ldexp(self, other): return Torchish(jnp.ldexp(self.value, _coerce(other)))
+    def le(self, other): return Torchish(self.value <= _coerce(other))
+    def le_(self, other): self.value = self.value <= _coerce(other); return self
+    def lerp(self, end, weight): return Torchish(self.value + _coerce(weight) * (_coerce(end) - self.value))
+    def lerp_(self, end, weight): self.value = self.value + _coerce(weight) * (_coerce(end) - self.value); return self
+    def less(self, other): return Torchish(self.value < _coerce(other))
+    def less_(self, other): self.value = self.value < _coerce(other); return self
+    def log(self): return Torchish(jnp.log(self.value))
+    def log10(self): return Torchish(jnp.log10(self.value))
+    def log1p(self): return Torchish(jnp.log1p(self.value))
+    def log2(self): return Torchish(jnp.log2(self.value))
+    def log2_(self): self.value = jnp.log2(self.value); return self
+    def log_(self): self.value = jnp.log(self.value); return self
+    def logit(self, eps=None):
+        x = self.value if eps is None else jnp.clip(self.value, eps, 1 - eps)
+        return Torchish(jnp.log(x / (1 - x)))
+    def long(self): return Torchish(self.value.astype(jnp.int64))
+    def lt(self, other): return Torchish(self.value < _coerce(other))
+    def lt_(self, other): self.value = self.value < _coerce(other); return self
+    def min(self, dim=None, keepdim=False): return Torchish(jnp.min(self.value, axis=dim, keepdims=keepdim))
+    def mm(self, mat2): return Torchish(self.value @ _coerce(mat2))
+    def msort(self): return Torchish(jnp.sort(self.value, axis=-1))
+    def mv(self, vec): return Torchish(self.value @ _coerce(vec))
+    def ne(self, other): return Torchish(self.value != _coerce(other))
+    def ne_(self, other): self.value = self.value != _coerce(other); return self
+    def neg(self): return Torchish(-self.value)
+    def neg_(self): self.value = -self.value; return self
+    def norm(self, p='fro', dim=None, keepdim=False, dtype=None):
+        x = self.value.astype(t2j_dtype(dtype)) if dtype is not None else self.value
+        ord_ = None if p == 'fro' else p
+        return Torchish(jnp.linalg.norm(x, ord=ord_, axis=dim, keepdims=keepdim))
+    def numpy(self): return np.array(self.value)
+    def outer(self, vec2): return Torchish(jnp.outer(self.value, _coerce(vec2)))
+    def prod(self, dim=None, keepdim=False, dtype=None):
+        x = self.value.astype(t2j_dtype(dtype)) if dtype is not None else self.value
+        return Torchish(jnp.prod(x, axis=dim, keepdims=keepdim))
+    def qr(self):
+        q, r = jnp.linalg.qr(self.value)
+        return (Torchish(q), Torchish(r))
+    def ravel(self): return Torchish(jnp.ravel(self.value))
+    def roll(self, shifts, dims=None): return Torchish(jnp.roll(self.value, shifts, axis=dims))
+    def rot90(self, k=1, dims=(0, 1)): return Torchish(jnp.rot90(self.value, k=k, axes=dims))
+    def round(self, decimals=0): return Torchish(jnp.round(self.value, decimals=decimals))
+    def sgn(self): return Torchish(jnp.sign(self.value))
+    def sgn_(self): self.value = jnp.sign(self.value); return self
+    def short(self): return Torchish(self.value.astype(jnp.int16))
+    def sign(self): return Torchish(jnp.sign(self.value))
+    def sign_(self): self.value = jnp.sign(self.value); return self
+    def sinc(self): return Torchish(jnp.sinc(self.value))
+    def sinc_(self): self.value = jnp.sinc(self.value); return self
+    def sinh(self): return Torchish(jnp.sinh(self.value))
+    def sinh_(self): self.value = jnp.sinh(self.value); return self
+    def split(self, split_size_or_sections, dim=0):
+        size = self.value.shape[dim]
+        if isinstance(split_size_or_sections, int):
+            split_sizes = [split_size_or_sections] * (size // split_size_or_sections)
+            if size % split_size_or_sections:
+                split_sizes.append(size % split_size_or_sections)
+        else:
+            split_sizes = list(split_size_or_sections)
+        indices = np.cumsum(split_sizes)[:-1].tolist()
+        return tuple(Torchish(x) for x in jnp.split(self.value, indices, axis=dim))
+    def std(self, dim=None, unbiased=True, keepdim=False): return Torchish(jnp.std(self.value, axis=dim, ddof=1 if unbiased else 0, keepdims=keepdim))
+    def svd(self, full_matrices=True):
+        u, s, vh = jnp.linalg.svd(self.value, full_matrices=full_matrices)
+        return (Torchish(u), Torchish(s), Torchish(vh))
+    def t(self): return self if self.ndim < 2 else Torchish(jnp.swapaxes(self.value, 0, 1))
+    def t_(self): self.value = self.value if self.ndim < 2 else jnp.swapaxes(self.value, 0, 1); return self
+    def take(self, index): return Torchish(jnp.take(self.value, _coerce(index)))
+    def tan(self): return Torchish(jnp.tan(self.value))
+    def tan_(self): self.value = jnp.tan(self.value); return self
+    def tile(self, dims): return Torchish(jnp.tile(self.value, dims))
+    def trace(self): return Torchish(jnp.trace(self.value))
+    def tril(self, diagonal=0): return Torchish(jnp.tril(self.value, k=diagonal))
+    def tril_(self, diagonal=0): self.value = jnp.tril(self.value, k=diagonal); return self
+    def triu(self, diagonal=0): return Torchish(jnp.triu(self.value, k=diagonal))
+    def triu_(self, diagonal=0): self.value = jnp.triu(self.value, k=diagonal); return self
+    def trunc(self): return Torchish(jnp.trunc(self.value))
+    def type(self, dtype=None, non_blocking=False, **kwargs):
+        if dtype is None:
+            return str(self.dtype)
+        if isinstance(dtype, str):
+            dtype_name = dtype.split('.')[-1]
+            if hasattr(torch, dtype_name):
+                dtype = getattr(torch, dtype_name)
+            else:
+                raise NotImplementedError(f"Unknown dtype string for Tensor.type: {dtype}")
+        return self.to(dtype=dtype)
+    def var(self, dim=None, unbiased=True, keepdim=False): return Torchish(jnp.var(self.value, axis=dim, ddof=1 if unbiased else 0, keepdims=keepdim))
+    def vdot(self, other): return Torchish(jnp.vdot(self.value, _coerce(other)))
+    def where(self, condition, y): return Torchish(jnp.where(_coerce(condition), self.value, _coerce(y)))
+    def xlogy(self, other):
+        y = _coerce(other)
+        return Torchish(jnp.where(self.value == 0, 0, self.value * jnp.log(y)))
+    def xpu(self, device=None, non_blocking=False, memory_format=None): return self
+    def zero_(self): self.value = jnp.zeros_like(self.value); return self
+
+    # Remaining short doc names that require APIs torch exposes but JAX does not map to 1:1.
+    # Keep these explicit and non-dispatching.
+    def geqrf(self):
+        raise NotImplementedError("Torchish.geqrf is not implemented yet")
+
+    def histc(self, bins=100, min=0, max=0):
+        x = self.value
+        if max <= min:
+            min = float(jnp.min(x))
+            max = float(jnp.max(x))
+        hist, _ = jnp.histogram(x, bins=bins, range=(min, max))
+        return Torchish(hist.astype(jnp.float32))
+
+    def istft(self, *args, **kwargs):
+        raise NotImplementedError("Torchish.istft is not implemented yet")
+
+    def lu(self, pivot=True, get_infos=False):
+        if get_infos:
+            raise NotImplementedError("Torchish.lu(get_infos=True) is not implemented yet")
+        p, l, u = jax.scipy.linalg.lu(self.value)
+        return (Torchish(p), Torchish(l), Torchish(u))
+
+    def map_(self, tensor, callable):
+        vec = np.vectorize(callable)
+        self.value = jnp.asarray(vec(np.asarray(self.value), np.asarray(_coerce(tensor))))
+        return self
+
+    def mode(self, dim=-1, keepdim=False):
+        if self.ndim != 1 or dim not in (-1, 0):
+            raise NotImplementedError("Torchish.mode currently supports 1D tensors only")
+        values, inverse, counts = jnp.unique(self.value,
+                                             return_inverse=True,
+                                             return_counts=True)
+        mode_idx = jnp.argmax(counts)
+        mode_value = values[mode_idx]
+        first_pos = jnp.argmax((inverse == mode_idx).astype(jnp.int32))
+        if keepdim:
+            mode_value = jnp.expand_dims(mode_value, axis=0)
+            first_pos = jnp.expand_dims(first_pos, axis=0)
+        return (Torchish(mode_value), Torchish(first_pos))
+
+    def orgqr(self, input2):
+        raise NotImplementedError("Torchish.orgqr is not implemented yet")
+
+    def ormqr(self, input2, input3, left=True, transpose=False):
+        raise NotImplementedError("Torchish.ormqr is not implemented yet")
+
+    def put_(self, index, source, accumulate=False):
+        idx = _coerce(index)
+        src = _coerce(source)
+        flat = self.value.reshape((-1, ))
+        if accumulate:
+            flat = flat.at[idx].add(src)
+        else:
+            flat = flat.at[idx].set(src)
+        self.value = flat.reshape(self.value.shape)
+        return self
+
+    def set_(self, *args, **kwargs):
+        raise NotImplementedError("Torchish.set_ is not implemented yet")
+
+    def smm(self, mat2): return Torchish(self.value @ _coerce(mat2))
+
+    def stft(self, *args, **kwargs):
+        raise NotImplementedError("Torchish.stft is not implemented yet")
+    # fmt: on
 
 
 def _coerce(x):
